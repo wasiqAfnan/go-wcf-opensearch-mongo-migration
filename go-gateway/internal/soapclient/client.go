@@ -30,6 +30,7 @@ type Client struct {
 	httpClient *http.Client
 }
 
+// called by main.go to create a new client
 func New(endpoint string, timeout time.Duration) *Client {
 	return &Client{
 		endpoint:   endpoint,
@@ -38,6 +39,7 @@ func New(endpoint string, timeout time.Duration) *Client {
 }
 
 func (c *Client) CustomerByID(ctx context.Context, id int) (Customer, error) {
+	// create the SOAP request
 	soapRequest := fmt.Sprintf(`<?xml version="1.0" encoding="utf-8"?>
 <s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/">
   <s:Body>
@@ -51,15 +53,19 @@ func (c *Client) CustomerByID(ctx context.Context, id int) (Customer, error) {
 	if err != nil {
 		return Customer{}, fmt.Errorf("create WCF request: %w", err)
 	}
+
+	// set the request headers
 	req.Header.Set("Content-Type", "text/xml; charset=utf-8")
 	req.Header.Set("SOAPAction", `"`+soapAction+`"`)
 
+	// make the request
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		return Customer{}, fmt.Errorf("call WCF endpoint: %w", err)
 	}
 	defer resp.Body.Close()
 
+	// read the response
 	body, err := io.ReadAll(io.LimitReader(resp.Body, 2<<20)) // cap response size at 2 MiB
 	if err != nil {
 		return Customer{}, fmt.Errorf("read WCF response: %w", err)
@@ -68,6 +74,7 @@ func (c *Client) CustomerByID(ctx context.Context, id int) (Customer, error) {
 		return Customer{}, fmt.Errorf("WCF returned HTTP %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
 	}
 
+	// parse the response body to extract the customer
 	var envelope soapEnvelope
 	if err := xml.Unmarshal(body, &envelope); err != nil {
 		return Customer{}, fmt.Errorf("decode WCF SOAP XML: %w", err)
@@ -75,11 +82,14 @@ func (c *Client) CustomerByID(ctx context.Context, id int) (Customer, error) {
 	if envelope.Body.Fault != nil {
 		return Customer{}, fmt.Errorf("WCF SOAP fault: %s", envelope.Body.Fault.String)
 	}
+
+	// extract the customer from the response
 	result := envelope.Body.GetCustomerByIDResponse.Result
 	if result == nil || result.Nil == "true" || result.Nil == "1" {
 		return Customer{}, ErrNotFound
 	}
 
+	// return the customer as json format
 	return Customer{
 		CustomerID: result.CustomerID,
 		Name:       result.Name,
