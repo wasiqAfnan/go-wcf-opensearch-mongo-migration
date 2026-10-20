@@ -22,6 +22,8 @@ if (string.IsNullOrWhiteSpace(connectionString))
 // configure the service
 builder.Services.AddSingleton(new CustomerRepository(connectionString));
 builder.Services.AddTransient<CustomerService>();
+builder.Services.AddHttpClient<InvoiceSearchService>();
+builder.Services.AddTransient<InvoiceSearchService>();
 builder.Services.AddServiceModelServices();
 builder.Services.AddServiceModelMetadata();
 builder.Services.AddSingleton<IServiceBehavior, UseRequestHeadersForMetadataAddressBehavior>();
@@ -30,12 +32,16 @@ var app = builder.Build();
 
 app.MapGet("/healthz", () => Results.Ok(new { status = "ok" }));
 
-// Comfigure CoreWCF SOAP Endpoints 
+// Configure CoreWCF SOAP Endpoints 
 app.UseServiceModel(serviceBuilder =>
 {
     serviceBuilder.AddService<CustomerService>();
     serviceBuilder.AddServiceEndpoint<CustomerService, ICustomerService>(
         new BasicHttpBinding(), "/CustomerService");
+
+    serviceBuilder.AddService<InvoiceSearchService>();
+    serviceBuilder.AddServiceEndpoint<InvoiceSearchService, IInvoiceSearchService>(
+        new BasicHttpBinding(), "/InvoiceSearchService");
 });
 
 // configure the metadata endpoint
